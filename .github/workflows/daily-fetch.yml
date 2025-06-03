@@ -1,0 +1,46 @@
+name: Daily Article Fetch
+
+on:
+  schedule:
+    - cron: '0 21 * * *'  # 毎日UTC 21:00（日本時間朝6:00頃）に実行
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium webdriver-manager beautifulsoup4 requests
+      
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v1
+      
+      - name: Fetch articles and generate RSS
+        run: python scripts/fetch_articles.py
+        env:
+          NIKKEI_USERNAME: ${{ secrets.NIKKEI_USERNAME }}
+          NIKKEI_PASSWORD: ${{ secrets.NIKKEI_PASSWORD }}
+      
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add data/ docs/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update RSS feed with latest articles [skip ci]" && git push)
+      
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          force_orphan: true  # GitHub Pagesブランチをクリーンに保つ
